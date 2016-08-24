@@ -1,12 +1,13 @@
 from org.gumtree.vis.mask import RectangleMask
 from gumpy.vis.event import MouseListener, MaskEventListener, AWTMouseListener
+import math
 
 # Script control setup area
 # script info
 __script__.title = 'Emu Plot Data'
 __script__.version = '0.1'
 
-SAVED_MASK_PRFN = 'kowari.savedMasks'
+SAVED_MASK_PRFN = 'emu.savedMasks'
 
 reg_changed = False
 __mask_updated__ = False
@@ -22,7 +23,7 @@ class RegionEventListener(MaskEventListener):
         global reg_changed
         if not reg_changed:
             update_mask_list()
-            run_intg()
+            update_plots()
     
     def mask_updated(self, mask):
         global reg_changed
@@ -40,7 +41,7 @@ class MousePressListener(AWTMouseListener):
     def mouse_released(self, event):
         global __mask_updated__
         if __mask_updated__ :
-            run_intg()
+            update_plots()
             __mask_updated__ = False
     
 mouse_press_listener = MousePressListener()
@@ -59,6 +60,9 @@ reg_list = Par('string', '')
 reg_list.title = 'masks[x_min, x_max, y_min, y_max]'
 reg_list.enabled = True
 reg_list.colspan = 2
+s_mask = get_prof_value(SAVED_MASK_PRFN)
+if not s_mask is None and s_mask.strip() != '':
+    reg_list.value = s_mask
 def change_masks():
     global reg_changed
     reg_changed = True
@@ -71,7 +75,7 @@ def change_masks():
         for mask in masks:
             Plot1.add_mask_2d(float(mask[0]), float(mask[1]), \
                               float(mask[2]), float(mask[3]), mask[4])
-    run_intg()
+    update_plots()
     reg_changed = False
     print 'masks are updated'
 #if reg_list.value.strip() == '':
@@ -93,14 +97,39 @@ def plot_data():
         loc = dinfo.getLocation()
         ds = df[str(loc)]
         if ds.ndim == 3 :
-            d0 = ds[0]
+            d0 = ds
         elif ds.ndim == 4:
-            d0 = ds[0, 0]
-        Plot1.set_dataset(d0)
+            d0 = ds[0]
+        Plot1.set_dataset(d0[0])
         Plot1.set_mask_listener(regionListener)
-        Plot2.set_dataset(d0.sum(1))
+        Plot1.set_awt_mouse_listener(mouse_press_listener)
+        Plot1.title = str(ds.name)
+        masks = []
+        if reg_enabled.value :
+            if len(Plot1.get_masks()) > 0:
+                masks = Plot1.get_masks()
+            else :
+                if reg_list.value != None and reg_list.value.strip() != '':
+                    masks = str2maskstr(reg_list.value)
+                    for mask in masks:
+                        Plot1.add_mask_2d(float(mask[0]), float(mask[1]), \
+                                          float(mask[2]), float(mask[3]), mask[4])
+                    masks = Plot1.get_masks()
+        di = v_intg(d0, masks)
+        Plot2.set_dataset(di[0])
+        Plot2.title = str(ds.name)
+        save_preference()
     else:
         slog('please select at least one dataset')
+        
+def update_plots():
+    slog('mask changed')
+    plot_data()
+
+def save_preference():
+    set_prof_value(SAVED_MASK_PRFN , str(reg_list.value))
+    save_pref()
+        
 # Use below example to create a new Plot
 # Plot4 = Plot(title = 'new plot')
 
@@ -167,3 +196,46 @@ def mask2str(masks):
             res += ';'
     return res
 
+def accept_masks():
+    change_masks()
+
+def discard_masks():
+    update_mask_list()
+
+def v_intg(ds, masks):
+    if len(masks) > 0 :
+        x_axis = ds.axes[-1]
+        y_axis = ds.axes[-2]
+        res = dataset.instance([ds.shape[0], ds.shape[2]], float('NaN'), dtype=float)
+        for mask in masks:
+            y_iMin = int((mask.minY - y_axis[0]) / (y_axis[-1] - y_axis[0]) \
+                         * (y_axis.size - 1))
+            if y_iMin < 0 :
+                y_iMin = 0
+            if y_iMin >= y_axis.size:
+                continue
+            y_iMax = int((mask.maxY - y_axis[0]) / (y_axis[-1] - y_axis[0]) \
+                         * (y_axis.size - 1)) + 1
+            if y_iMax < 0:
+                continue
+            x_iMin = int((mask.minX - x_axis[0]) / (x_axis[-1] - x_axis[0]) \
+                         * (x_axis.size - 1))
+            if x_iMin < 0:
+                x_iMin = 0;
+            if x_iMin >= x_axis.size:
+                continue
+            x_iMax = int((mask.maxX - x_axis[0]) / (x_axis[-1] - x_axis[0]) \
+                         * (x_axis.size - 1)) + 1
+            if x_iMax < 0:
+                continue
+#            res[:, x_iMin : x_iMax] = ds[:, y_iMin : y_iMax, x_iMin : x_iMax].intg(1)
+            res[:, x_iMin : x_iMax] = ds[:, :, x_iMin : x_iMax].intg(1)
+        res.axes[0] = ds.axes[0]
+        res.axes[1] = ds.axes[2]
+        mask = masks[0]
+        res.copy_metadata_shallow(ds)
+        res.append_log('Processed with: apply mask y in [' + ('%d' % round(mask.minY)) + ',' \
+                       + ('%d' % round(mask.maxY)) + '], x in [' + ('%.1f' % round(mask.minX, 1)) + ',' + ('%.1f' % round(mask.maxX, 1)) + ']')
+        return res
+    else:
+        return ds.intg(1)
