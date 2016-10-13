@@ -53,6 +53,7 @@ my = $entry/instrument/crystal/my
 pom = $entry/instrument/crystal/pom 
 ptz = $entry/instrument/crystal/ptz 
 wavelength = $entry/instrument/crystal/wavelength 
+chom = $entry/instrument/chom
 
 RCollZ = $entry/instrument/crystal/RCollZ 
 rco = $entry/instrument/crystal/rco 

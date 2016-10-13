@@ -50,13 +50,21 @@ def update_mask_list():
     if Plot1.ndim > 0:
         reg_list.value = mask2str(Plot1.get_masks())
 
+data_name = Par('string', 'default', options = ['default', 'total_t', \
+                                         'total_xt', 'xtaux', 'ytaux'])
+data_name.title = 'select data'
+act_plot1 = Act('plot_data()', 'Plot Selected Data') 
+g_data = Group('Select Data')
+g_data.numColumns = 2
+g_data.add(data_name, act_plot1)
+
 # Use below example to create parameters.
 # The type can be string, int, float, bool, file.
-reg_enabled = Par('bool', True)
+reg_enabled = Par('bool', False)
 reg_enabled.title = 'region selection enabled'
 reg_enabled.colspan = 2
 
-reg_list = Par('string', '')
+reg_list = Par('string', '', options=['I1[26, 33, 1, 1999]', 'I2'])
 reg_list.title = 'masks[x_min, x_max, y_min, y_max]'
 reg_list.enabled = True
 reg_list.colspan = 2
@@ -86,9 +94,14 @@ g_reg = Group('Region Selection')
 g_reg.numColumns = 2
 g_reg.add(reg_enabled, reg_list, reg_discard, reg_accept)
             
+g_intg = Group('Draw Sensitivity Profile')
+sel_xbin = Par('int', 0, options = [0], command = 'plot_intensity()')
+sel_xbin.title = 'select x bin index'
+scan_var = Par('str', 'mom', options=['mom'])
+scan_var.title = 'scan variable'
+act_intg = Act('plot_intensity()', 'Plot Tube Sensitivity')
+g_intg.add(scan_var, sel_xbin, act_intg)
 
-# Use below example to create a button
-act_plot1 = Act('plot_data()', 'Plot Selected Data') 
 def plot_data():
     dss = __DATASOURCE__.getSelectedDatasets()
 #    for dinfo in dss:
@@ -96,32 +109,106 @@ def plot_data():
         dinfo = dss[0]
         loc = dinfo.getLocation()
         ds = df[str(loc)]
-        if ds.ndim == 3 :
-            d0 = ds
-        elif ds.ndim == 4:
-            d0 = ds[0]
-        Plot1.set_dataset(d0[0])
-        Plot1.set_mask_listener(regionListener)
-        Plot1.set_awt_mouse_listener(mouse_press_listener)
-        Plot1.title = str(ds.name)
-        masks = []
-        if reg_enabled.value :
-            if len(Plot1.get_masks()) > 0:
-                masks = Plot1.get_masks()
-            else :
-                if reg_list.value != None and reg_list.value.strip() != '':
-                    masks = str2maskstr(reg_list.value)
-                    for mask in masks:
-                        Plot1.add_mask_2d(float(mask[0]), float(mask[1]), \
-                                          float(mask[2]), float(mask[3]), mask[4])
+        if data_name.value == 'default':
+            if ds.ndim == 3 :
+                d0 = ds
+            elif ds.ndim == 4:
+                d0 = ds[0]
+            Plot1.set_dataset(d0[0])
+            Plot1.set_mask_listener(regionListener)
+            Plot1.set_awt_mouse_listener(mouse_press_listener)
+            Plot1.title = str(ds.name)
+            masks = []
+            if reg_enabled.value :
+                if len(Plot1.get_masks()) > 0:
                     masks = Plot1.get_masks()
-        di = v_intg(d0, masks)
-        Plot2.set_dataset(di[0])
-        Plot2.title = str(ds.name)
-        save_preference()
+                else :
+                    if reg_list.value != None and reg_list.value.strip() != '':
+                        masks = str2maskstr(reg_list.value)
+                        for mask in masks:
+                            Plot1.add_mask_2d(float(mask[0]), float(mask[1]), \
+                                              float(mask[2]), float(mask[3]), mask[4])
+                        masks = Plot1.get_masks()
+            di = v_intg(d0, masks)
+            Plot2.set_dataset(di[0])
+            Plot2.title = str(ds.name)
+            save_preference()
+        else :
+            d = ds[str(data_name.value)]
+            if d.ndim == 3:
+                pd = Dataset(d[0], axes=[range(d.shape[1]), range(d.shape[2])])
+                Plot1.set_dataset(pd)
+            elif d.ndim == 2:
+                pd = Dataset(d[0], axes=[range(d.shape[1])])
+                Plot1.set_dataset(pd)
     else:
         slog('please select at least one dataset')
         
+def plot_intensity():
+    global Plot3
+    Plot3.clear()
+    dss = __DATASOURCE__.getSelectedDatasets()
+#    for dinfo in dss:
+    if len(dss) <= 1:
+        slog('please select at least two data files')
+        return
+    masks = []
+    if reg_enabled.value :
+        if reg_list.value != None and reg_list.value.strip() != '':
+            masks = str2mask(reg_list.value)
+    haxis = None
+    nbin = 0
+    if len(masks) > 0:
+        it = zeros([len(masks), len(dss)])
+        for i in xrange(len(dss)):
+            dinfo = dss[i]
+            loc = dinfo.getLocation()
+            ds = df[str(loc)]
+            if ds.ndim == 3 :
+                d0 = ds
+            elif ds.ndim == 4:
+                d0 = ds[0]
+            for j in xrange(len(masks)):
+                mask = masks[j]
+                it[j, i] = v_intg(d0, [mask]).sum()
+        for i in xrange(len(masks)) :
+            cv = it[i]
+            cv.title = masks[i].name
+            Plot3.add_dataset(cv)
+    else:
+        hs = get_ndim(dss[0])
+        it = zeros([len(dss), hs])
+        vaxis = arange(len(dss), float)
+        for i in xrange(len(dss)):
+            dinfo = dss[i]
+            loc = dinfo.getLocation()
+            ds = df[str(loc)]
+            if ds.ndim == 3 :
+                d0 = ds
+            elif ds.ndim == 4:
+                d0 = ds.get_reduced()
+            if d0.ndim == 4:
+                raise Exception, 'must be 3-dimentional data'
+            idx = sel_xbin.value
+            if idx >= d0.shape[-1]:
+                idx = d0.shape[-1]
+            it[i] = d0[:, :, idx].get_reduced().intg(1)
+            vaxis[i] = ds[str(scan_var.value)][0]
+            if i == 0:
+                haxis = ds.axes[0]
+                nbin = d0.shape[-1]
+        it.set_axes([vaxis, haxis], anames = [scan_var.value, haxis.title])
+        Plot3.set_dataset(it)
+    sel_xbin.options = range(nbin)
+    Plot3.y_label = scan_var.value + ' (degree)'
+    Plot3.x_label = haxis.title + ' (' + haxis.units + ')'
+    Plot3.title = 'Intensity Profile for Bin ' + str(sel_xbin.value)
+    print 'done'
+    
+def get_ndim(dinfo):
+    ds = df[str(dinfo.getLocation())]
+    return ds.shape[0]
+    
 def update_plots():
     slog('mask changed')
     plot_data()
@@ -228,8 +315,8 @@ def v_intg(ds, masks):
                          * (x_axis.size - 1)) + 1
             if x_iMax < 0:
                 continue
-#            res[:, x_iMin : x_iMax] = ds[:, y_iMin : y_iMax, x_iMin : x_iMax].intg(1)
-            res[:, x_iMin : x_iMax] = ds[:, :, x_iMin : x_iMax].intg(1)
+            res[:, x_iMin : x_iMax] = ds[:, y_iMin : y_iMax, x_iMin : x_iMax].intg(1)
+#            res[:, x_iMin : x_iMax] = ds[:, :, x_iMin : x_iMax].intg(1)
         res.axes[0] = ds.axes[0]
         res.axes[1] = ds.axes[2]
         mask = masks[0]
