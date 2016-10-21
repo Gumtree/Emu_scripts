@@ -11,14 +11,6 @@ SAVED_MASK_PRFN = 'emu.savedMasks'
 
 reg_changed = False
 __mask_updated__ = False
-
-_DS = None
-_RES = None
-
-# Use below example to create a new Plot
-Plot4 = GPlot(view_title = 'Plot4: Data')
-Plot3.set_view_title('Plot3: Fitting')
-
 class RegionEventListener(MaskEventListener):
     
     def __init__(self):
@@ -61,23 +53,18 @@ def update_mask_list():
 data_name = Par('string', 'default', options = ['default', 'total_t', \
                                          'total_xt', 'xtaux', 'ytaux'])
 data_name.title = 'select data'
-act_plot1 = Act('plot_data()', 'Plot Selected Data')
-sel_frame = Par('int', 0, options = [0], command = 'select_frame()')
-sel_frame.title = 'frame index'
-scan_pos = Par('label', ' ' * 10 + '--' + ' ' * 10)
-nav_left = Act('jump_left()', '<-')
-nav_right = Act('jump_right()', '->')
+act_plot1 = Act('plot_data()', 'Plot Selected Data') 
 g_data = Group('Select Data')
 g_data.numColumns = 2
-g_data.add(data_name, act_plot1, sel_frame, scan_pos, nav_left, nav_right)
+g_data.add(data_name, act_plot1)
 
 # Use below example to create parameters.
 # The type can be string, int, float, bool, file.
-reg_enabled = Par('bool', True)
+reg_enabled = Par('bool', False)
 reg_enabled.title = 'region selection enabled'
 reg_enabled.colspan = 2
 
-reg_list = Par('string', '', options=['I1[21.0,50.0,31809,96997]'])
+reg_list = Par('string', '', options=['I1[26, 33, 1, 1999]', 'I2'])
 reg_list.title = 'masks[x_min, x_max, y_min, y_max]'
 reg_list.enabled = True
 reg_list.colspan = 2
@@ -108,10 +95,12 @@ g_reg.numColumns = 2
 g_reg.add(reg_enabled, reg_list, reg_discard, reg_accept)
             
 g_intg = Group('Draw Sensitivity Profile')
+sel_xbin = Par('int', 0, options = [0], command = 'plot_intensity()')
+sel_xbin.title = 'select x bin index'
 scan_var = Par('str', 'mom', options=['mom'])
 scan_var.title = 'scan variable'
 act_intg = Act('plot_intensity()', 'Plot Tube Sensitivity')
-g_intg.add(scan_var, act_intg)
+g_intg.add(scan_var, sel_xbin, act_intg)
 
 g_fit2 = Group('Gaussian 2D Fitting')
 g_fit2.numColumns = 2
@@ -132,7 +121,6 @@ fit_chi2 = Par('float', 'NaN')
 g_fit2.add(x_peak, x_width, y_peak, y_width, amp_par, bkg_par, fit_act, fit_chi2)
 
 def plot_data():
-    global _DS, _RES
     dss = __DATASOURCE__.getSelectedDatasets()
 #    for dinfo in dss:
     if len(dss) > 0:
@@ -141,19 +129,13 @@ def plot_data():
         ds = df[str(loc)]
         if data_name.value == 'default':
             if ds.ndim == 3 :
-                _DS = ds
-            else :
-                raise Exception, 'data must be 3-dimensional, get ' + str(ds.ndim)
-            n_frame = len(_DS)
-            axis0 = _DS.axes[0]
-            sel_frame.options = range(n_frame)
-            if sel_frame.value >= n_frame:
-                sel_frame.value = 0
-            scan_pos.value = str(axis0.name) + ': ' + '%.2f' % axis0[sel_frame.value]
-            Plot1.set_dataset(_DS[sel_frame.value])
+                d0 = ds
+            elif ds.ndim == 4:
+                d0 = ds[0]
+            Plot1.set_dataset(d0[0])
             Plot1.set_mask_listener(regionListener)
             Plot1.set_awt_mouse_listener(mouse_press_listener)
-            Plot1.title = str(ds.name) + ' index: ' + str(sel_frame.value) + ' ' + str(scan_pos.value)
+            Plot1.title = str(ds.name)
             masks = []
             if reg_enabled.value :
                 if len(Plot1.get_masks()) > 0:
@@ -165,16 +147,12 @@ def plot_data():
                             Plot1.add_mask_2d(float(mask[0]), float(mask[1]), \
                                               float(mask[2]), float(mask[3]), mask[4])
                         masks = Plot1.get_masks()
-            _RES = v_intg(_DS, masks)
-            Plot2.set_dataset(_RES[0])
-            Plot2.set_legend_on(False)
-            Plot2.y_label = 'counts'
-            Plot2.title = 'Integration of ' + str(ds.name) + ' Index: ' \
-                        + str(sel_frame.value) + ' ' + str(scan_pos.value)
+            di = v_intg(d0, masks)
+            Plot2.set_dataset(di[0])
+            Plot2.title = str(ds.name)
             save_preference()
         else :
             d = ds[str(data_name.value)]
-            _DS = Dataset(d, axes = [range(d.shape[0]), range(d.shape[1]), range(d.shape[2])])
             if d.ndim == 3:
                 pd = Dataset(d[0], axes=[range(d.shape[1]), range(d.shape[2])])
                 Plot1.set_dataset(pd)
@@ -183,49 +161,10 @@ def plot_data():
                 Plot1.set_dataset(pd)
     else:
         slog('please select at least one dataset')
-
-def select_frame():
-    global _DS, _RES
-    if _DS == None:
-        return
-    idx = sel_frame.value
-    if idx < 0 or idx >= len(_DS):
-        raise Exception, 'index ' + str(idx) + ' out of bound'
-    axis0 = _DS.axes[0]
-    scan_pos.value = str(axis0.name) + ': ' + '%.2f' % axis0[idx]
-    Plot1.set_dataset(_DS[idx])
-    Plot1.title = str(_DS.name) + ' index: ' + str(idx) + ' ' + str(scan_pos.value)
-    Plot1.set_mask_listener(regionListener)
-    Plot1.set_awt_mouse_listener(mouse_press_listener)
-#    masks = []
-#    if reg_enabled.value :
-#        if len(Plot1.get_masks()) > 0:
-#            masks = Plot1.get_masks()
-#        else :
-#            if reg_list.value != None and reg_list.value.strip() != '':
-#                masks = str2maskstr(reg_list.value)
-#                for mask in masks:
-#                    Plot1.add_mask_2d(float(mask[0]), float(mask[1]), \
-#                                      float(mask[2]), float(mask[3]), mask[4])
-#                masks = Plot1.get_masks()
-#    di = v_intg(_DS, masks)
-    Plot2.set_dataset(_RES[idx])
-    Plot2.y_label = 'counts'
-    Plot2.title = 'Integration of ' + str(_DS.name) + ' index: ' \
-                + str(idx) + ' ' + str(scan_pos.value)
-#    save_preference()
-
-def jump_left():
-    if _DS != None and sel_frame.value > 0:
-        sel_frame.value -= 1
-
-def jump_right():
-    if _DS != None and sel_frame.value < len(_DS) - 1:
-        sel_frame.value += 1
-            
+        
 def plot_intensity():
-    global Plot3, Plot4
-    Plot4.clear()
+    global Plot3
+    Plot3.clear()
     dss = __DATASOURCE__.getSelectedDatasets()
 #    for dinfo in dss:
     if len(dss) <= 1:
@@ -237,63 +176,57 @@ def plot_intensity():
             masks = str2mask(reg_list.value)
     haxis = None
     nbin = 0
-#    if len(masks) > 0:
-#        it = zeros([len(masks), len(dss)])
-#        for i in xrange(len(dss)):
-#            dinfo = dss[i]
-#            loc = dinfo.getLocation()
-#            ds = df[str(loc)]
-#            if ds.ndim == 3 :
-#                d0 = ds
-#            elif ds.ndim == 4:
-#                d0 = ds[0]
-#            for j in xrange(len(masks)):
-#                mask = masks[j]
-#                it[j, i] = v_intg(d0, [mask]).sum()
-#        for i in xrange(len(masks)) :
-#            cv = it[i]
-#            cv.title = masks[i].name
-#            Plot4.add_dataset(cv)
-#    else:
-    hs = get_ndim(dss[0])
-    inv_seq = test_y_seq(dss[0], dss[-1])
-    it = zeros([len(dss), hs])
-    vaxis = arange(len(dss), float)
-    for i in xrange(len(dss)):
-        if inv_seq:
-            dinfo = dss[len(dss) - 1 - i]
-        else:
+    if len(masks) > 0:
+        it = zeros([len(masks), len(dss)])
+        for i in xrange(len(dss)):
             dinfo = dss[i]
-        loc = dinfo.getLocation()
-        ds = df[str(loc)]
-        if ds.ndim != 3 :
-            raise Exception, 'must be 3-dimentional data'
-        masks = []
-        if reg_enabled.value :
-            if len(Plot1.get_masks()) > 0:
-                masks = Plot1.get_masks()
-            else :
-                if reg_list.value != None and reg_list.value.strip() != '':
-                    mask_strs = str2maskstr(reg_list.value)
-                    if Plot1.ds != None :
-                        for mask in mask_strs:
-                            Plot1.add_mask_2d(float(mask[0]), float(mask[1]), \
-                                              float(mask[2]), float(mask[3]), mask[4])
-                        masks = Plot1.get_masks()
-        res = v_intg(ds, masks)
-        it[i] = res.sum(0)
-        vaxis[i] = ds[str(scan_var.value)][0]
-        if i == 0:
-            haxis = ds.axes[0]
-#                nbin = d0.shape[-1]
-    it.set_axes([vaxis, haxis], anames = [scan_var.value, haxis.title])
-    Plot4.set_dataset(it)
-    
-    Plot4.y_label = scan_var.value + ' (degree)'
-    Plot4.x_label = haxis.title + ' (' + haxis.units + ')'
-    Plot4.title = 'Intensity Profile for Bin ' + str(sel_frame.value)
+            loc = dinfo.getLocation()
+            ds = df[str(loc)]
+            if ds.ndim == 3 :
+                d0 = ds
+            elif ds.ndim == 4:
+                d0 = ds[0]
+            for j in xrange(len(masks)):
+                mask = masks[j]
+                it[j, i] = v_intg(d0, [mask]).sum()
+        for i in xrange(len(masks)) :
+            cv = it[i]
+            cv.title = masks[i].name
+            Plot3.add_dataset(cv)
+    else:
+        hs = get_ndim(dss[0])
+        inv_seq = test_y_seq(dss[0], dss[-1])
+        it = zeros([len(dss), hs])
+        vaxis = arange(len(dss), float)
+        for i in xrange(len(dss)):
+            if inv_seq:
+                dinfo = dss[len(dss) - 1 - i]
+            else:
+                dinfo = dss[i]
+            loc = dinfo.getLocation()
+            ds = df[str(loc)]
+            if ds.ndim == 3 :
+                d0 = ds
+            elif ds.ndim == 4:
+                d0 = ds.get_reduced()
+            if d0.ndim == 4:
+                raise Exception, 'must be 3-dimentional data'
+            idx = sel_xbin.value
+            if idx >= d0.shape[-1]:
+                idx = d0.shape[-1]
+            it[i] = d0[:, :, idx].get_reduced().intg(1)
+            vaxis[i] = ds[str(scan_var.value)][0]
+            if i == 0:
+                haxis = ds.axes[0]
+                nbin = d0.shape[-1]
+        it.set_axes([vaxis, haxis], anames = [scan_var.value, haxis.title])
+        Plot3.set_dataset(it)
+    sel_xbin.options = range(nbin)
+    Plot3.y_label = scan_var.value + ' (degree)'
+    Plot3.x_label = haxis.title + ' (' + haxis.units + ')'
+    Plot3.title = 'Intensity Profile for Bin ' + str(sel_xbin.value)
     fit_2d()
-    slog( 'finished plotting')
+    slog( 'done')
     
 def get_ndim(dinfo):
     ds = df[str(dinfo.getLocation())]
@@ -307,22 +240,19 @@ def test_y_seq(dfirst, dlast):
 def update_plots():
     slog('mask changed')
     plot_data()
-    dss = __DATASOURCE__.getSelectedDatasets()
-    if Plot4.ds != None and len(dss) > 1:
-        plot_intensity()
 
 def save_preference():
     set_prof_value(SAVED_MASK_PRFN , str(reg_list.value))
     save_pref()
         
 def fit_2d():
-    global Plot3, Plot4
-    ds = Plot4.ds
-    if ds is None or len(ds) == 0:
-        log('Error: no curve to fit in Plot4.\n')
+    global Plot3
+    ds = Plot3.ds
+    if len(ds) == 0:
+        log('Error: no curve to fit in Plot3.\n')
         return
     if ds.ndim != 2:
-        log('Error: Plot4 must have 2D data.\n')
+        log('Error: Plot3 must have 2D data.\n')
         return
     y_name = ds.axes[0].name
     x_name = ds.axes[1].name
@@ -379,23 +309,25 @@ def fit_2d():
         log('BACKGROUND/PEAK = ' + str(bkg_par.value))
         log('FITTING_QUALLITY_CHI2 = ' + str(fit_chi2.value))
         log('***********************************************')
-        Plot3.set_dataset(res)
-        Plot3.x_label = x_name
-        Plot3.y_label = y_name
+        Plot2.set_dataset(res)
+        Plot2.x_label = x_name
+        Plot2.y_label = y_name
 #        print fitting.params
     except:
         traceback.print_exc(file = sys.stdout)
         log('can not fit\n')
 
-#g_exp = Group('Export to CSV')
-#exp_act = Act('export_csv()', 'Export')
-#g_exp.add(exp_act)
-#        
-#def export_csv():
-#    fn = selectSaveFile(ext = ['*.csv'])
-#    if fn is None:
-#        return
+g_exp = Group('Export to CSV')
+exp_act = Act('export_csv()', 'Export')
+g_exp.add(exp_act)
+        
+def export_csv():
+    fn = selectSaveFile(ext = ['*.csv'])
+    if fn is None:
+        return
     
+# Use below example to create a new Plot
+# Plot4 = Plot(title = 'new plot')
 
 # This function is called when pushing the Run button in the control UI.
 def __run_script__(fns):
@@ -421,14 +353,9 @@ def __dispose__():
     global Plot1
     global Plot2
     global Plot3
-    global Plot4
-    global _DS
     Plot1.clear()
     Plot2.clear()
     Plot3.clear()
-    Plot4.close()
-    _DS = None
-    df.datasets.clear()
     
 def str2maskstr(value):
     items = value.split(';')
