@@ -1,3 +1,4 @@
+from gumpy.nexus.fitting import Fitting, GAUSSIAN_FITTING
 from org.gumtree.vis.mask import RectangleMask
 from gumpy.vis.event import MouseListener, MaskEventListener, AWTMouseListener
 import math
