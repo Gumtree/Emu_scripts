@@ -6,6 +6,7 @@ import time
 # script info
 __script__.title = 'Trace Peak in Time-of-Flight'
 __script__.version = '1.0'
+_FITTING_GAP = 0.0
 
 class FrameMouseListener(MouseListener):
     
@@ -68,7 +69,9 @@ data_name = Par('string', 'default', options = ['default', 'total_t', \
 data_name.title = 'select data'
 act_plot1 = Act('plot_data_each_step()', 'Find Peaks of Time-of-Flight')
 act_hist = Act('show_2d_hist()', 'Plot 2D Histogram')
+act_hist.independent = True
 act_profile = Act('show_1d_profile()', 'Plot Peaks of Selected Tube')
+act_profile.independent = True
 #act_fit1_tubes = Act('fit_tubes()', 'Draw Peak Position For All Tubes')
 g_data = Group('2D Frame for Each Scan Step')
 g_data.numColumns = 2
@@ -190,7 +193,7 @@ def show_1d_profile():
         
 # Use below example to create a button
 def plot_data_each_step():
-    global _DS, _RES1, _RES2, _FIT
+    global _DS, _RES1, _RES2, _FIT, _FITTING_GAP
     dss = __DATASOURCE__.getSelectedDatasets()
 #    for dinfo in dss:
     if len(dss) == 0:
@@ -246,6 +249,7 @@ def plot_data_each_step():
         _RES2.set_axes([_DS.axes[0], _DS.axes[2]])
 #        fitting = Fitting(GAUSSIAN_FITTING)
         for i in xrange(_DS.shape[0]):
+            print 'processing for frame ' + str(i)
             for j in xrange(_DS.shape[2]):
 #                cv = _DS[4, :, 4].get_reduced(1)
                 cv = _DS[i, :, j].get_reduced(1)
@@ -258,12 +262,12 @@ def plot_data_each_step():
                     fitting.set_bounds('sigma', 1000, 10000)
                     fitting.set_param('mean', 26000)
                     fitting.set_param('sigma', 4000)
-                    time.sleep(0.3)
+                    time.sleep(_FITTING_GAP)
                     res1 = fitting.fit()
                     res1.title = 'fitting1'
                     res1.var[:] = 0
 #                    Plot3.set_dataset(res)
-                    print i, j, 1, fitting.params['mean'], fitting.params['sigma']
+#                    print i, j, 1, fitting.params['mean'], fitting.params['sigma']
                     _RES1[i, j] = fitting.params['mean']
                     fr = dict()
                     fr['res'] = res1
@@ -288,12 +292,12 @@ def plot_data_each_step():
                     fitting.set_bounds('sigma', 1000, 10000)
                     fitting.set_param('mean', 105000)
                     fitting.set_param('sigma', 4000)
-                    time.sleep(0.3)
+                    time.sleep(_FITTING_GAP)
                     res2 = fitting.fit()
                     res2.title = 'fitting2'
                     res2.var[:] = 0
 #                    Plot3.set_dataset(res)
-                    print i, j, 2, fitting.params['mean'], fitting.params['sigma']
+#                    print i, j, 2, fitting.params['mean'], fitting.params['sigma']
                     _RES2[i, j] = fitting.params['mean']
                     fr = dict()
                     fr['res'] = res2
