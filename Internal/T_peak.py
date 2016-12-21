@@ -2,6 +2,7 @@ from gumpy.nexus.fitting import Fitting, GAUSSIAN_FITTING
 from gumpy.vis.event import MouseListener
 import traceback
 import time
+import math
 import json
 # Script control setup area
 # script info
@@ -638,7 +639,7 @@ def fit_curve2():
         peak2_pos.value = fitting.mean
 #        print fitting.params
     except:
-#        traceback.print_exc(file = sys.stdout)
+        traceback.print_exc(file = sys.stdout)
         log('can not fit\n')
         
 def accept_fit1():
@@ -912,6 +913,19 @@ def import_ascii():
             slog('decoding ' + vn)
             item = json.loads(vv, cls = DatasetDecoder)
             globals()[vn] = item
+    if len(sel_xbin.options) != _DS.shape[2]:
+        sel_xbin.options = range(_DS.shape[2])
+    if len(sel_frame.options) != _DS.shape[0]:
+        sel_frame.options = range(_DS.shape[0])
+    if sel_xbin.value == 0:
+        select_xbin()
+    else:
+        sel_xbin.value = 0
+    if sel_frame.value == 0:
+        select_frame()
+    else:
+        sel_frame.value = 0
+    
 #    slog('time cost = ' + str(time.time() - t1))
         
 class DatasetEncoder(json.JSONEncoder):
