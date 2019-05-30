@@ -1,0 +1,21 @@
+# Doppler moves at various velocities (vel) and amplitudes (amp)
+# (Douglas Clowes)
+
+proc test_doppler{}{
+foreach vel {0.02 0.04 0.06 0.1 0.2 0.5 1.0 2.0 4.7}{
+foreach amp {25 50 75}{
+
+hset /instrument/doppler/ctrl/run_cmd 0
+wait 15
+
+broadcast "Doppler Test at Velocity=${vel), Amplitude=${amp}"
+
+hset /instrument/doppler/ctrl/amplitude $amp
+hset /instrument/doppler/ctrl/velocity $vel
+hset /instrument/doppler/ctrl/run_cmd 1
+wait 45
+}
+}
+hset /instrument/doppler/ctrl/run_cmd 0
+}
+publish test_doppler user
