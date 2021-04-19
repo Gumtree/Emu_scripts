@@ -1,0 +1,19 @@
+# Sample Environment: CF-10 + DL-1
+# Sample: Ba3Yb2Zn5O11
+
+# Doppler = 4.7 m/s 75 mm
+
+histmem mode time
+histmem preset 1800
+
+# acquisition 16 blocks of 1 hrs
+
+samplename Ba3Yb2Zn5O11-1.6K
+
+for {set idx0 0} {$idx0 < 16} {incr idx0} {
+	broadcast data_set $idx0 
+	histmem start block
+	newfile TOTAL_HISTOGRAM_XT TOTAL_HISTOGRAM_T RAW_TOTAL_HISTOGRAM_XTAUX RAW_TOTAL_HISTOGRAM_YTAUX
+	save 
+}
+
