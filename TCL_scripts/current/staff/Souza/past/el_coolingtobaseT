@@ -1,0 +1,28 @@
+ 
+histmem stop
+
+
+samplename ECo_coolingtobaseT_el
+
+# ramp for VTI
+hset /sample/tc3/control/ramp_loop_3 1,0.1
+wait 1
+hset /sample/tc3/sensor/setpoint3 1
+wait 1
+# ramp for H2L2
+hset /sample/tc3/control/ramp_loop_1 1,0.1
+wait 1
+hset /sample/tc3/sensor/setpoint1 1
+wait 1
+
+runscan dummy_motor 10 14 170 time 180 datatype { TOTAL_HISTOGRAM_XT TOTAL_HISTOGRAM_T RAW_TOTAL_HISTOGRAM_XTAUX }
+
+# Turn ramp off
+hset /sample/tc3/control/ramp_loop_3 0,1.0
+wait 1
+hset /sample/tc3/control/ramp_loop_1 0,1.0
+wait 1
+
+
+#tertiary close
+
